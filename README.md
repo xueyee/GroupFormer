@@ -4,7 +4,7 @@ Group Activity Recognition with Clustered Spatial-TemporalTransformer
 
 |    Backbone     |  Style | Action Acc | Activity Acc|  Config | Download      |
 | :-------------: | :-----: | :-----: | :------: | :------: | :-----------: |
-|   Inv3+flow+pose   |  pytorch  |   0.847 |  0.957  |  [config](https://github.com/xueyee/GroupFormer/config/cluster_tr/inv3_cluster_sttr_global_v3_flip_w3_v4_cat2.yaml) | [model](https://drive.google.com/file/d/1vcmdfZRvIfmkZtkfnP-8CHvzYMT4BxaH/view?usp=sharing) &#124; [test_log]( https://drive.google.com/file/d/1Y8e_yd8ObZuaY1Vp1rhrlx0FFSsD_dz7/view?usp=sharing)
+|   Inv3+flow+pose   |  pytorch  |   0.847 |  0.957  |  [config](https://github.com/xueyee/GroupFormer/blob/main/config/cluster_tr/inv3_cluster_sttr_global_v3_flip_w3_v4_cat2.yaml) | [model](https://drive.google.com/file/d/1vcmdfZRvIfmkZtkfnP-8CHvzYMT4BxaH/view?usp=sharing) &#124; [test_log]( https://drive.google.com/file/d/1Y8e_yd8ObZuaY1Vp1rhrlx0FFSsD_dz7/view?usp=sharing)
 
 Volleyball dataset is [here](https://github.com/mostafa-saad/deep-activity#dataset).
 
