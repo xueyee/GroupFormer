@@ -11,10 +11,8 @@ from torch.nn.init import normal_
 class ST_plus_TR_block_actor(nn.Module):
     def __init__(self,config,embed_feat):
         super(ST_plus_TR_block_actor, self).__init__()
-        #self.input_features = input_feat
         self.embed_features = embed_feat
 
-        #self.embed_fc = nn.Linear(self.input_features, self.embed_features)
 
         #actor tr encoder
         encoder_layer_actor = TransformerEncoderLayer_cluster(self.embed_features, config.Nhead,total_size=config.total_size,window_size=config.window_size, dropout=config.dropout_porb, normalize_before=True)
@@ -63,10 +61,8 @@ class ST_plus_TR_block_actor(nn.Module):
 class ST_plus_TR_block_temp(nn.Module):
     def __init__(self,config,embed_feat):
         super(ST_plus_TR_block_temp, self).__init__()
-        #self.input_features = input_feat
         self.embed_features = embed_feat
 
-        #self.embed_fc = nn.Linear(self.input_features, self.embed_features)
 
         #actor tr encoder
         encoder_layer_actor = TransformerEncoderLayer_cluster(self.embed_features, config.Nhead,total_size=config.total_size,window_size=config.window_size, dropout=config.dropout_porb, normalize_before=True)
@@ -116,10 +112,8 @@ class ST_plus_TR_block_temp(nn.Module):
 class ST_plus_TR_block_cross(nn.Module):
     def __init__(self,config,embed_feat):
         super(ST_plus_TR_block_cross, self).__init__()
-        #self.input_features = input_feat
-        self.embed_features = embed_feat
 
-        #self.embed_fc = nn.Linear(self.input_features, self.embed_features)
+        self.embed_features = embed_feat
 
         #actor tr encoder
         encoder_layer_actor = TransformerEncoderLayer_cluster(self.embed_features, config.Nhead,total_size=config.total_size,window_size=config.window_size, dropout=config.dropout_porb, normalize_before=True)
@@ -182,7 +176,7 @@ class ST_plus_TR_cross_cluster_v2(nn.Module):
     def __init__(self,config):
         super(ST_plus_TR_cross_cluster_v2, self).__init__()
         self.num_STTR_layers=config.num_STTR_layers
-        self.input_features=config.input_features
+
         embed_feat=config.embed_features
         self.actions_num_classes = config.actions_num_classes
         self.activities_num_classes = config.activities_num_classes
@@ -214,16 +208,6 @@ class ST_plus_TR_cross_cluster_v2(nn.Module):
         self.actions_fc = nn.Linear(self.embed_features, self.actions_num_classes)
     def forward(self,x,global_token):
         B, T, N, F = x.shape
-        # print(self.input_features)
-        # print(x.shape)
-        #assert self.input_features == F
-        #x = x.reshape(-1, self.input_features)
-        # B,T,N,C_e
-        #x = self.embed_fc(x).reshape(B, T, N, -1)
-        #pose_feature = self.pose_fc(poses).reshape(B, T, N, -1)
-        #flow_feature = self.flow_fc(flows).reshape(B, T, N, -1)
-        #x = torch.cat([x,pose_feature,flow_feature],dim=3)
-        #x = self.cat_fc(x)
         #N,B,T,C_e
         x = x.permute(2,0,1,3)
         #1,B*T,C_e
