@@ -200,6 +200,7 @@ class ST_plus_TR_cross_cluster_v2(nn.Module):
         self.STTR_module.append(ST_plus_TR_block_cross(config,embed_feat))
         #config.window_size=6
         self.STTR_module.append(ST_plus_TR_block_cross(config,embed_feat))
+        self.STTR_module.append(ST_plus_TR_block_cross(config, embed_feat))
         #config.window_size=4
         #self.STTR_module.append(ST_plus_TR_block_cross(config,embed_feat))
         #config.window_size=3
@@ -239,6 +240,7 @@ class ST_plus_TR_cross_cluster_v2(nn.Module):
         memory,tgt,loss1=self.STTR_module[0](memory,tgt)
         memory,tgt,loss2=self.STTR_module[1](memory,tgt)
         memory,tgt,loss3=self.STTR_module[2](memory,tgt)
+        memory,tgt,loss4=self.STTR_module[3](memory,tgt)
         #B*T*N,-1
         #N,B,T,-1
         memory=memory.reshape(N,B,T,-1).permute(1,2,0,3).reshape(-1,self.embed_features)
@@ -256,4 +258,4 @@ class ST_plus_TR_cross_cluster_v2(nn.Module):
         activities_scores=self.activities_fc(tgt)
         activities_scores=activities_scores.reshape(B,T,-1).mean(dim=1)
 
-        return actions_scores,activities_scores,loss1+loss2+loss3
+        return actions_scores,activities_scores,loss1+loss2+loss3+loss4
