@@ -67,7 +67,7 @@ dataset:
     workers: 2
     train:
         sample: 'train'
-        batch_size: 4
+        batch_size: 2
         flip: true
         data_path: 'path_to/volleyball/videos' # include flow
         tracks: 'path_to/videos/tracks_normalized.pkl'
