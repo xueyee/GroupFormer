@@ -6,6 +6,12 @@ import shutil
 import math
 import os
 from pathlib import Path
+import logging
+
+from group.utils.log_helper import init_log
+
+init_log('group')
+logger = logging.getLogger('group')
 
 def save_net(fname, net):
     with h5py.File(fname, 'w') as h5f:
@@ -54,7 +60,6 @@ def load_DDPModel(model, path):
     own_keys = set(model.state_dict().keys())
     missing_keys = own_keys - ckpt_keys
     for k in missing_keys:
-
         logger.warning('missing keys from checkpoint: {}'.format(k))
     return model
 

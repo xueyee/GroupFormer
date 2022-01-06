@@ -1,3 +1,10 @@
+# ------------------------------------------------------------------------
+# GroupFromer
+# Copyright (c) 2020 SenseTime. All Rights Reserved.
+# Licensed under the Apache License, Version 2.0 [see LICENSE for details]
+# ------------------------------------------------------------------------
+# Modified from DETR (https://github.com/facebookresearch/detr) and Routing Transformers (https://arxiv.org/pdf/2003.05997.pdf)
+# ------------------------------------------------------------------------
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,19 +13,11 @@ from inspect import isfunction
 from operator import mul
 from functools import partial, reduce, wraps
 
-#from local_attention import LocalAttention
-#from axial_positional_embedding import AxialPositionalEmbedding
-#from product_key_memory import PKM
-##from mixture_of_experts import MoE
-#from routing_transformer.reversible import ReversibleSequence, SequentialSequence
 import torch.distributed as dist
 # constants
-
 TOKEN_SELF_ATTN_VALUE = -5e4
 KMEAN_INIT_ITERS = 10
-
 # helper functions
-
 
 def default(x, d):
     if x is None:
@@ -89,17 +88,6 @@ def ema(old, new, decay):
     if old is None:
         return new
     return old * decay + new * (1 - decay)
-
-
-# helper classes
-
-
-
-
-
-
-
-
 
 # kmeans related function and class
 
@@ -320,24 +308,19 @@ class SelfAttention(nn.Module):
         super().__init__()
         assert dim % heads == 0, 'hidden dimension must be divisible by number of heads'
         assert (max_seq_len % window_size) == 0, 'maximum sequence length must be divisible by the target window size'
-        #assert local_attn_heads <= heads, 'number of local attention heads must be less than total heads'
-        #assert not (receives_context and local_attn_heads > 0), 'local attention cannot be used for self attention with context'
-        assert not (receives_context and causal), 'contextual attention layer cannot be causal'
 
-        #local_attn_window_size = default(local_attn_window_size, window_size)
-        #context_window_size = default(context_window_size, window_size)
+        assert not (receives_context and causal), 'contextual attention layer cannot be causal'
 
         self.shared_qk = shared_qk
         self.receives_context = receives_context
         self.heads = heads
-        #部分local head,部分global head
 
         self.global_attn_heads = heads
 
         self.window_size = window_size
-        #per head dim
+
         dim_head = dim // heads
-        #total dim
+
         dim_heads = dim_head * heads
         self.dim_head = dim_head
         if num_clusters ==None:
@@ -368,7 +351,7 @@ class SelfAttention(nn.Module):
         x=x.transpose(0,1)
 
         b, t, e, h, dh = *x.shape, self.heads, self.dim_head
-        #划分头
+
         split_heads = lambda v: reshape_dim(v, -1, (-1, dh)).transpose(1, 2).contiguous()
 
         kv_input = x if not self.receives_context else context
@@ -397,12 +380,10 @@ class SelfAttention(nn.Module):
 
         return self.dropout(out), total_loss
 
-class RoutingTransformer(nn.Module):
+class ClusteringTransformer(nn.Module):
     def __init__(self, dim, max_seq_len, heads = 8, window_size = 64,num_clusters=None, causal = False, attn_dropout = 0., attn_layer_dropout = 0., kmeans_ema_decay = 0.999, commitment_factor = 1e-4, _register_kmeans_update = False, rel_pos_emb = True, num_mem_kv = 0, shared_qk = None):
         super().__init__()
         shared_qk = default(shared_qk, causal) # default to shared qk when causal, due to experimental results
-
-
 
         self.get_attn =SelfAttention(dim, max_seq_len, heads, window_size,num_clusters=num_clusters, causal = causal,  attn_dropout = attn_dropout, dropout = attn_layer_dropout, kmeans_ema_decay = kmeans_ema_decay, commitment_factor = commitment_factor, num_mem_kv = num_mem_kv, shared_qk = shared_qk)
 

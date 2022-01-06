@@ -49,7 +49,7 @@ class ModelBuilder(nn.Module):
     def load_checkpoint(self, config):
         if config.checkpoint is not None:
             assert osp.exists(config.checkpoint), 'checkpoint file does not exist'
-            logger.info("load Check point: " + str(config.checkpoint))
+            logger.info("load check point: " + str(config.checkpoint))
             load_DDPModel(self, str(config.checkpoint))
 
         # import pdb

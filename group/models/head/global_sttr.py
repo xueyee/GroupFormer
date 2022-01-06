@@ -31,7 +31,7 @@ class tokenizer(nn.Module):
         L=self.token_num
         C_o=self.embed_channel
         x=x.reshape(B*T,C,H,W)
-        #B*T,L,H,W
+
         adj=self.spatial_conv(x)
         #B*T,C,H,W
         embed_feat=self.conv(x)
@@ -61,12 +61,8 @@ class global_sttr(nn.Module):
                                                 norm=encoder_norm_actor)
     #input=B,T,C,H,W
     def forward(self,x):
-        B,T,C,H,W=x.shape
-        #B*T,C,L
         token=self.tokenizer(x)
-        #L,B*T,C
         token_s=token.permute(2,0,1)
-        #L,B*T,C
         token_s=self.encoder(token_s)
 
         return token_s

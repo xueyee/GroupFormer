@@ -1,40 +1,16 @@
+# ------------------------------------------------------------------------
+# GroupFromer
+# Copyright (c) 2020 SenseTime. All Rights Reserved.
+# Licensed under the Apache License, Version 2.0 [see LICENSE for details]
+# ------------------------------------------------------------------------
+# Modified from DETR (https://github.com/facebookresearch/detr)
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# ------------------------------------------------------------------------
 import copy
 from typing import Optional, List
-
 import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
-
-
-def knn_attn_mask(x, y=None,head=8, k=10):
-    """
-    :param x: Bx head xCxN
-    :param y: B x head x C x M
-    :param k: scalar
-    :return: BxMxk
-    """
-    N,B_T,C=x.shape
-    x=x.permute(1,2,0).contiguous().unsqueeze(1).repeat(1,head,1,1)
-    if y is None:
-        y = x
-    _, _, _,M = y.shape
-    # logging.info('Size in KNN: {} - {}'.format(x.size(), y.size()))
-    inner = -2 * torch.matmul(y.permute(0,1,3, 2).contiguous(), x)
-    #B,h,1,N
-    xx = torch.sum(x ** 2, dim=2, keepdim=True)
-    #B,h,1,M
-    yy = torch.sum(y ** 2, dim=2, keepdim=True)
-    pairwise_distance = -xx - inner - yy.permute(0,1,3, 2).contiguous()
-    _, idx = pairwise_distance.topk(k=k, dim=-1)  # (batch_size,head, M, k)
-    idx_knn=idx.reshape(B_T*head,M,k)
-    idx_base=(torch.arange(0,B_T*head).view(-1,1,1)*M).cuda()
-    idx=idx_knn+idx_base
-    idx=idx.view(-1)
-    attn_mask=torch.zeros_like(pairwise_distance).view(-1).cuda()
-    attn_mask[idx]=1
-    attn_mask=attn_mask.reshape(B_T*head,M,N)
-    return attn_mask
-
 
 class Transformer(nn.Module):
 

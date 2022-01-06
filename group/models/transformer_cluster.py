@@ -1,6 +1,14 @@
+# ------------------------------------------------------------------------
+# GroupFromer
+# Copyright (c) 2020 SenseTime. All Rights Reserved.
+# Licensed under the Apache License, Version 2.0 [see LICENSE for details]
+# ------------------------------------------------------------------------
+# Modified from DETR (https://github.com/facebookresearch/detr) and Pytorch Source code
+# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# ------------------------------------------------------------------------
+
 import copy
 from typing import Optional, List
-
 import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
@@ -13,100 +21,8 @@ from torch.nn.init import xavier_uniform_
 from torch.nn.init import constant_
 from torch.nn.init import xavier_normal_
 from torch.nn.parameter import Parameter
-from torch.nn.modules import Module
-#from torch.functional import has_torch_function, handle_torch_function
-from group.models.routing_transformer import SelfAttention
-def knn_attn_mask(x, y=None, k=3):
-    """
-    :param x: Bx head xNxC
-    :param y: B x head x M x C
-    :param k: scalar
-    :return: BxMxk
-    """
-    # B,h,C,N
-    device = x.device
-    x = x.permute(0, 1, 3, 2).contiguous()
-    if y is not None:
-        y = y.permute(0, 1, 3, 2).contiguous()
-    B, head, C, N = x.shape
-    if y is None:
-        y = x
-    # B,h,C,M
-    _, _, _, M = y.shape
-    #
-    inner = -2 * torch.matmul(y.permute(0, 1, 3, 2).contiguous(), x)
-    # B,h,1,N
-    xx = torch.sum(x ** 2, dim=2, keepdim=True)
-    # B,h,1,M
-    yy = torch.sum(y ** 2, dim=2, keepdim=True)
-    pairwise_distance = -xx - inner - yy.permute(0, 1, 3, 2).contiguous()
-    # import pdb
-    # pdb.set_trace()
-    _, idx = pairwise_distance.topk(k=k, dim=-1)  # (batch_size,head, M, k)
 
-    idx_knn = idx.reshape(B * head, M, k)
-    # idx_base=(torch.arange(0,B*head,device=device).view(-1,1,1))*M
-    # print(idx_base)
-    # print(idx_knn)
-    idx = idx_knn  # +idx_base
-    # print(idx.shape)
-    idx = idx.reshape(B * head * M, -1)
-    # print(idx)
-    # print(idx.shape)
-    attn_mask = torch.zeros_like(pairwise_distance).view(B * head * M, -1)
-
-    for i in range(B * head * M):
-        attn_mask[i, idx[i]] = 1
-
-    attn_mask = attn_mask.reshape(B, head, M, N)
-    # print(attn_mask)
-
-    # print(attn_mask[:,:,...])
-    return attn_mask
-
-class Transformer(nn.Module):
-
-    def __init__(self, d_model=512, nhead=8, num_encoder_layers=6,
-                 num_decoder_layers=6, dim_feedforward=2048, dropout=0.1,
-                 activation="relu", normalize_before=False,
-                 return_intermediate_dec=False):
-        super().__init__()
-
-        encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward,
-                                                dropout, activation, normalize_before)
-        encoder_norm = nn.LayerNorm(d_model) if normalize_before else None
-        self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
-
-        decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward,
-                                                dropout, activation, normalize_before)
-        decoder_norm = nn.LayerNorm(d_model)
-        self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm,
-                                          return_intermediate=return_intermediate_dec)
-
-        self._reset_parameters()
-
-        self.d_model = d_model
-        self.nhead = nhead
-
-    def _reset_parameters(self):
-        for p in self.parameters():
-            if p.dim() > 1:
-                nn.init.xavier_uniform_(p)
-
-    def forward(self, src, mask, query_embed, pos_embed):
-        # flatten NxCxHxW to HWxNxC
-        bs, c, h, w = src.shape
-        src = src.flatten(2).permute(2, 0, 1)
-        pos_embed = pos_embed.flatten(2).permute(2, 0, 1)
-        query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1)
-        mask = mask.flatten(1)
-
-        tgt = torch.zeros_like(query_embed)
-        memory = self.encoder(src, src_key_padding_mask=mask, pos=pos_embed)
-        hs = self.decoder(tgt, memory, memory_key_padding_mask=mask,
-                          pos=pos_embed, query_pos=query_embed)
-        return hs.transpose(1, 2), memory.permute(1, 2, 0).view(bs, c, h, w)
-
+from group.models.cluster_transformer import ClusteringTransformer
 
 class TransformerEncoder_cluster(nn.Module):
 
@@ -121,15 +37,15 @@ class TransformerEncoder_cluster(nn.Module):
                 src_key_padding_mask: Optional[Tensor] = None,
                 pos: Optional[Tensor] = None):
         output = src
-        #tod o:多个layer的时候
+        total_loss=torch.tensor(0.,device=src.device,dtype=src.dtype)
         for layer in self.layers:
             output,loss = layer(output, src_mask=mask,
                            src_key_padding_mask=src_key_padding_mask, pos=pos)
-
+            total_loss+=loss
         if self.norm is not None:
             output = self.norm(output)
 
-        return output,loss
+        return output,total_loss
 
 
 class TransformerDecoder(nn.Module):
@@ -175,17 +91,22 @@ class TransformerDecoder(nn.Module):
 
 class TransformerEncoderLayer_cluster(nn.Module):
 
-    def __init__(self, d_model, nhead,total_size,window_size ,dim_feedforward=2048, dropout=0.1,
-                 activation="relu", normalize_before=False):
+    def __init__(self, d_model, nhead,total_size,window_size ,num_clusters=None,dim_feedforward=2048, dropout=0.1,
+                 activation="relu", normalize_before=False,temporal=False):
         super().__init__()
-        #self.self_attn =MultiheadAttention(d_model, nhead, dropout=dropout)
-        if self.training:
-            total_size=total_size.training
-        else:
-            total_size=total_size.val
-        self.k_attn=SelfAttention(dim=d_model,max_seq_len=total_size,heads=nhead,window_size=window_size,
-                                  causal=False,shared_qk=True,attn_dropout=0.1)
 
+        if self.training:
+            if temporal:
+                total_size=7
+            else:
+                total_size = total_size.training
+        else:
+            if temporal:
+                total_size=11
+            else:
+                total_size = total_size.val
+        self.k_attn=ClusteringTransformer(dim=d_model,max_seq_len=total_size,heads=nhead,window_size=window_size,num_clusters=num_clusters,
+                                       causal=False,attn_dropout=0.1,shared_qk=False)
         # Implementation of Feedforward model
         self.linear1 = nn.Linear(d_model, dim_feedforward)
         self.dropout = nn.Dropout(dropout)
@@ -208,11 +129,11 @@ class TransformerEncoderLayer_cluster(nn.Module):
                      src_key_padding_mask: Optional[Tensor] = None,
                      pos: Optional[Tensor] = None):
         q = k = self.with_pos_embed(src, pos)
-        #src2 = self.self_attn(q, k, value=src, attn_mask=src_mask,
+        #src1 = self.self_attn(q, k, value=src, attn_mask=src_mask,
         #                      key_padding_mask=src_key_padding_mask)[0]
 
         src2,loss=self.k_attn(q)
-        src=src+self.dropout1(src2)
+        src=src+src2
         #src = src + self.dropout1(src2)+src3
 
         src = self.norm1(src)
@@ -227,11 +148,10 @@ class TransformerEncoderLayer_cluster(nn.Module):
                     pos: Optional[Tensor] = None):
         src2 = self.norm1(src)
         q = k = self.with_pos_embed(src2, pos)
-        #src2 = self.self_attn(q, k, value=src2, attn_mask=src_mask,
-        #                      key_padding_mask=src_key_padding_mask)[0]
+
         src2, loss = self.k_attn(q)
 
-        src = src + self.dropout1(src2)
+        src = src + self.dropout1(src2)#+self.dropout1(src1)
         src2 = self.norm2(src)
         src2 = self.linear2(self.dropout(self.activation(self.linear1(src2))))
         src = src + self.dropout2(src2)
@@ -398,17 +318,6 @@ def _get_clones(module, N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
 
-def build_transformer(args):
-    return Transformer(
-        d_model=args.hidden_dim,
-        dropout=args.dropout,
-        nhead=args.nheads,
-        dim_feedforward=args.dim_feedforward,
-        num_encoder_layers=args.enc_layers,
-        num_decoder_layers=args.dec_layers,
-        normalize_before=args.pre_norm,
-        return_intermediate_dec=True,
-    )
 
 
 def _get_activation_fn(activation):
@@ -657,21 +566,7 @@ def multi_head_attention_forward(query: Tensor,
         - attn_output_weights: :math:`(N, L, S)` where N is the batch size,
           L is the target sequence length, S is the source sequence length.
     """
-    """
-    if not torch.jit.is_scripting():
-        tens_ops = (query, key, value, in_proj_weight, in_proj_bias, bias_k, bias_v,
-                    out_proj_weight, out_proj_bias)
-        if any([type(t) is not Tensor for t in tens_ops]) and has_torch_function(tens_ops):
-            return handle_torch_function(
-                multi_head_attention_forward, tens_ops, query, key, value,
-                embed_dim_to_check, num_heads, in_proj_weight, in_proj_bias,
-                bias_k, bias_v, add_zero_attn, dropout_p, out_proj_weight,
-                out_proj_bias, training=training, key_padding_mask=key_padding_mask,
-                need_weights=need_weights, attn_mask=attn_mask,
-                use_separate_proj_weight=use_separate_proj_weight,
-                q_proj_weight=q_proj_weight, k_proj_weight=k_proj_weight,
-                v_proj_weight=v_proj_weight, static_k=static_k, static_v=static_v)
-    """
+
     tgt_len, bsz, embed_dim = query.size()
     assert embed_dim == embed_dim_to_check
     # allow MHA to have different sizes for the feature dimension
